@@ -12,7 +12,14 @@
 
 //Globals
 //Array of strings, 20 strings of 25 length
-const char list[20][25];
+struct tag{
+    int id; 
+    char name[30];
+    char ip[30];
+    char port[10];
+};
+struct tag connects[5];
+int top;
 
 //Listening thread
 void *listening(void* data){
@@ -47,12 +54,22 @@ void *listening(void* data){
     
     return NULL;
 }
+//connect to an IP/Port
+//Return 1 on success, 0 on fail
+int connect(){
+    char hostN[30];
+    char portNum[30];
+    printf("Enter Host Name:\n");
+    scanf("%s",hostN);
+    printf("Enter Port Number:\n");
+    scanf("%s",portNum);
 
-
+    printf("Inputted Host Name: %s\nInputted Port Number: %s\n",hostN,portNum);
+}
 //Starts listening Code, Starts UI thread
 int main(int argc, char *argv[]){
     int port = 0;
-
+    top = 0;
     // Get Port from user, checks it
     if (argc <= 1) {
         printf("No port given, assuming port 8005\n");
@@ -65,7 +82,14 @@ int main(int argc, char *argv[]){
         }
         printf("Assigned Port is %d\n",port);
     }
-
+    
+    //init array of connections
+    int x = 0;
+    for (x = 0; x < sizeof(connects)/sizeof(struct tag); ++x){
+        connects[x].id = 0;
+        strcpy(connects[x].name,"");
+        strcpy(connects[x].ip,"");
+    }
     //Create pthread objects
     pthread_t listen;
     //Starts listening Thread
@@ -96,10 +120,18 @@ int main(int argc, char *argv[]){
                 printf("This server is listening on %d\n",port);
                 break;
             case '5':
-                //TODO get user input
+                //Connect
+                connect();
                 break;
             case '6':
-                //TODO: List is a global variable, updated by people pinging me, and by me pinging others
+                printf("Printing List of Connections:\n");
+                for (int x = 0; x < sizeof(connects)/sizeof(struct tag); ++x) {
+                    //print list
+                    if (connects[x].id != 0){
+                        printf("Connection %d: %s : %s\n",
+                            connects[x].id,connects[x].name,connects[x].ip);
+                    }
+                }
                 break;
             case '7':
                 //TODO: get user input
