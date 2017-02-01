@@ -9,24 +9,28 @@
 #include <ctype.h>
 #include <netdb.h>
 #include <unistd.h>
-
+#include <arpa/inet.h>
 //Globals
 //Array of strings, 20 strings of 25 length
 struct tag{
     int id; 
-    char name[30];
-    char ip[30];
+    char name[128];
+    char ip[128];
     char port[10];
 };
 struct tag connects[5];
 int amountCon;
+
 char hostIP[30];
+char hostName[128];
+char hostPort[10];
 //Listening thread
+
 void *listening(void* data){
     int *port = (int*)data;
     int listenF; 
     int response;
-    char word[100];
+    char word[1000];
 
     //create Socket
     struct sockaddr_in servaddr;
@@ -47,15 +51,60 @@ void *listening(void* data){
     //This will be in the loop
     while(1){
         response = accept(listenF, (struct sockaddr*) NULL, NULL);
-        bzero(word, 100);
-        //read(response,word, 100);
-        printf("SERVER: Connection Accepted\n");
-        //This is the part were we parse the command and write back correct information
-        //write(response, word,strlen(word) +1);
+        bzero(word, 1000);
+        read(response,word, 1000);
         
-        //TODO: Update List, update max connections
-        //TODO: check if max connections
-        //TODO: chat between?
+        //Bypass, checking if stream is alive
+        if (strcmp(word,"Alive")==0) {
+            write(response,"Alive",5);
+
+        }
+        //Check max connections
+        else if (amountCon >=5){
+            printf("Foreign Connection Rejected: Full Connections");
+            bzero(word,10000);
+            strcpy(word,"Denied");
+            write(response,word, strlen(word));
+        } else {
+            //If there are connections to be had
+            write(response,"Accepted",8);
+            printf("SERVER: Foreign Connection Accepted\n");
+            //This is the part were we parse the command and write back correct information
+            //TODO: Update List, update max connections
+            char *w = word;
+            //Get the info sent
+            //RECIEVED: NAME-IP-PORT-, add to list
+            //increase amount connected
+            amountCon++; 
+            //variables for foriegn name, ip and port
+            char *forName, *forIP, *forPort;
+            int flag =0;
+            forName = w; 
+            while (*w != 0) {
+                if (*w == '-') {
+                    *w = 0;
+                    if (flag == 0) {
+                        forIP = (w+1);
+                        flag++;}
+                    else if (flag == 1){
+                        forPort = (w+1);
+                        flag++;}
+                }
+                ++w;
+            }
+            //ADD DATA TO THE LIST
+            for (int x = 0; x < 5; ++x) {
+                //find first empty one
+                if (connects[x].id == -1) {
+                    connects[x].id = x;
+                    strcpy(connects[x].ip,forIP);
+                    strcpy(connects[x].name,forName);
+                    strcpy(connects[x].port,forPort);
+                    //stop loop early
+                    break;
+                }
+            }
+        }
     } 
     return NULL;
 }
@@ -68,15 +117,30 @@ int connect(){
         printf("Max Connections Reached!\n");
         return 0;
     }
-    char hostN[30];
+
+    char conN[30];
     char portNum[30];
     printf("Enter Host Name:\n");
-    scanf("%s",hostN);
+    scanf("%s",conN);
     printf("Enter Port Number:\n");
     scanf("%s",portNum);
-    printf("Inputted Host Name: %s\nInputted Port Number: %s\n",hostN,portNum);
+    printf("Inputted Host Name: %s\nInputted Port Number: %s\n",conN,portNum);
 
-    //TODO: Check duplicate connection attempt and if IP is localhost
+    //if you inputed your own name or ip
+    if (strcmp(conN,hostName)==0 || strcmp(conN,hostIP) == 0){
+        printf("Error, You cannot connect to yourself\n");
+        return 0;
+    }
+    //Check current connections to see if you are repeating
+    for (int x = 0; x < 5; ++x) {
+        //if there is a connection
+        if (connects[x].id != -1) {
+            if (strcmp(conN,connects[x].name)==0 || strcmp(conN,connects[x].ip)==0){
+                printf("Error, You cannot duplicate Connections\n");
+                return 0;
+            }
+        }
+    }
     //start socket
     //socket vars
     int sockfd, portn, n;
@@ -105,7 +169,7 @@ int connect(){
         return 0; 
     }
     //get server name
-    server = gethostbyname(hostN); 
+    server = gethostbyname(conN); 
     if (server==NULL){
         printf("ERROR, no such host\n");
         return 0;
@@ -116,8 +180,38 @@ int connect(){
     serv_addr.sin_port = htons(portn);
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
         return 0;
-    printf("Connection Accepted"); 
+    
+    //Write info
+    char info[1000];
+    //INFO: NAME IP PORT 
+    bzero(info,1000);
+    strcat(info,hostName);
+    
+    strcat(info,"-");
+    strcat(info,hostIP);
+    strcat(info,"-");
+    strcat(info,hostPort);
+    strcat(info,"-");
+    int a = write(sockfd,info,strlen(info));
+    if (a<0)
+        return 0;
+    bzero(info,1000);
+    //get info
+    a = read(sockfd, info,9999);
+    if (a<0)
+        return 0;
 
+    //Check if accepted
+    if (strcmp(info,"Accepted") != 0){
+        printf("Target Connection Busy\n");
+        return 0;
+    }
+
+    //If it reaches here, it was accepted!
+    printf("Connection Accepted\n"); 
+
+    struct hostent *h = gethostbyname(conN);
+    struct in_addr addr;
     // update counter
     amountCon++;
     //add to list
@@ -126,9 +220,10 @@ int connect(){
         //find first empty one
         if (connects[x].id == -1) {
             connects[x].id = x;
-            strcpy(connects[x].name,server->h_name);
-            strcpy(connects[x].ip,(char*)server->h_addr);
-            strcpy(connects[x].port,portNum);
+            memcpy(&addr,h->h_addr_list[0],sizeof(struct in_addr));
+            strcpy(connects[x].ip,inet_ntoa(addr));
+            strcpy(connects[x].name,conN);
+            sprintf(connects[x].port,"%d",portn);
             //stop loop early
             break;
         }
@@ -137,6 +232,15 @@ int connect(){
 }
 
 void fetchIP(){
+    gethostname(hostName,sizeof(hostName));
+
+    printf("Host Name: %s\n",hostName);
+    struct hostent *h =  gethostbyname(hostName);
+    struct in_addr addr;
+    memcpy(&addr,h->h_addr_list[0],sizeof(struct in_addr));
+    strcpy(hostIP,inet_ntoa(addr));
+    /*
+    OLD WAY
     FILE *fp;
     //write ip to file, read file, delete file
     system("ifconfig | grep inet | awk '{print $2}'  | head -1 >> ip ");
@@ -147,6 +251,41 @@ void fetchIP(){
     system("rm -f ip");
     //remove ip file
     strcpy(hostIP,myIp);
+    */
+}
+
+//prompts for connection number, 
+//pings server with Alive, expects response
+int isAlive(){
+    printf("Please input a valid connection number between 1-5");
+    int con = 0;
+    scanf("%d",con);
+    //fix for indexing
+    con--;
+    //check if connection is valid
+    if (connects[con].id == -1) {
+        //invalid
+        printf("Invalid input\n");
+        return 0;
+    }
+    //valid input
+    //create socket to ping server
+    int sockfd, portn, n;
+    struct sockaddr_in serv_addr;
+    struct hostent *server;
+    
+    portn = atoi(connects[con].port);
+    sockfd = socket(AF_INET, SOCK_STREAM,0);
+    if (sockfd < 0){
+        printf("Error Opening Socket");
+        return 0;
+    }
+    server = gethostbyname(connects[con].name);
+    if (server ==NULL) {
+        printf("Error, no such host\n");
+        return 0;
+    }
+
 }
 //Starts listening Code, Starts UI thread
 int main(int argc, char *argv[]){
@@ -165,19 +304,21 @@ int main(int argc, char *argv[]){
         }
         printf("Assigned Port is %d\n",port);
     }
-    
+    //make port global
+    sprintf(hostPort,"%d",port);
     //init array of connections
     int x = 0;
     for (x = 0; x < 5; ++x){
         connects[x].id = -1;
         strcpy(connects[x].name,"");
         strcpy(connects[x].ip,"");
+        strcpy(connects[x].port,"");
     }
     //Create pthread objects
     pthread_t listen;
     //Starts listening Thread
     pthread_create(&listen, NULL,listening,&port);
-
+    fetchIP();
     //Start UI
     while (1) {
         char *input;
@@ -195,8 +336,8 @@ int main(int argc, char *argv[]){
                         "4: Fetches Port of Current program\n"
                         "5: Attemps a Connection, promps for IP and Port address\n"
                         "6: Lists current Connections To and From this Server\n"
-                        "7: \n"
-                        "8: \n"
+                        "7: Deletes A Connection, Promps for Connection Number\n"
+                        "8: Promps for Connection, Checks if it is still alive\n"
                         "9: Prints Creator Information\n");
                 break;
             case '2':
@@ -222,21 +363,24 @@ int main(int argc, char *argv[]){
                     printf("Connection Failed\n");
                 break;
             case '6':
-                //TODO: Error when printing list
+                //List all connections into and outof
+                //DONE
                 printf("Printing List of Connections:\n");
                 for (int x = 0; x < 5; ++x) {
                     //print list
                     if (connects[x].id != -1){
-                        printf("Connection %d: %s : %s\n",
-                            connects[x].id,connects[x].name,connects[x].ip);
+                        printf("Connection %d: %s - %s\n",
+                            connects[x].id+1,connects[x].name,connects[x].ip);
                     }
                 }
                 break;
             case '7':
+                //Terminate
                 //TODO: get user input
                 break;
             case '8':
                 //TODO: get user input
+                isAlive();
                 break;
             case '9':
                 //DONE
