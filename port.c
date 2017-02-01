@@ -11,6 +11,9 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 //Globals
+//MAX CONNECTIONS
+#define N 5
+
 //Array of strings, 20 strings of 25 length
 struct tag{
     int id; 
@@ -18,13 +21,16 @@ struct tag{
     char ip[128];
     char port[10];
 };
-struct tag connects[5];
+struct tag connects[N];
 int amountCon;
 
 char hostIP[30];
 char hostName[128];
 char hostPort[10];
-//Listening thread
+
+//TODO: GO OVER REQUIREMENTS
+//TODO: ERROR MESSAGES
+//TODO: README
 
 //deletes connection, c is index in connects
 void deleteConnection(int c){
@@ -33,6 +39,26 @@ void deleteConnection(int c){
     strcpy(connects[c].name, "");
     strcpy(connects[c].ip, "");
     strcpy(connects[c].port,"");
+    amountCon--;
+    if (amountCon != 0){
+        printf("HEYHEY\n");
+        //move shit down 
+        for (int y = 0; y<N; ++y){
+        for (int x = 0; x < N-1; ++x) {
+            if(connects[x].id == -1 && connects[x+1].id !=-1) {
+                printf("YOUYOU\n");
+                //sift down
+                connects[x] = connects[x+1];
+                connects[x].id--;
+                connects[x+1].id = -1;
+                strcpy(connects[x+1].ip,"");
+                strcpy(connects[x+1].name,"");
+                strcpy(connects[x+1].port,"");
+
+            }
+       }
+       }
+    }
 }
 
 void *listening(void* data){
@@ -55,14 +81,13 @@ void *listening(void* data){
     bind(listenF, (struct sockaddr *)&servaddr, sizeof(servaddr));
 
     //Start Listening!
-    listen(listenF,5);
+    listen(listenF,N);
     
     //This will be in the loop
     while(1){
         response = accept(listenF, (struct sockaddr*) NULL, NULL);
         bzero(word, 1000);
         read(response,word, 1000);
-        
         //Bypass, checking if stream is alive
         if (strcmp(word,"Alive")==0) {
             write(response,"ALIVE",5);
@@ -71,7 +96,7 @@ void *listening(void* data){
            //Delete Instance in Connects 
            char *w = word;
            char *forName, *forIP;
-           w = (w+7*sizeof(char));// move past the delete-
+           w += 7;
            forName = w;
            int flag = 0;
            while (*w != 0) {
@@ -84,16 +109,15 @@ void *listening(void* data){
                 }
                 ++w;
             }
-            printf("TEST: %s - %s\n",forName, forIP);
             //armed with knowledge, delete it from the pool!
-            for (int x = 0; x < 5; ++x){
-                if (strcmp(connects[x].ip,forIP)==0 
-                && strcmp(connects[x].name,forName) ==0) {
+            for (int x = 0; x < N; ++x){
+                if (strcmp(connects[x].name,forName) ==0) {
+                    printf("SERVER: Connection %d (%s) Deleted!\n",x+1, connects[x].name);
                     deleteConnection(x);
                     break;
                 }
             }
-        } else if (amountCon >=5){
+        } else if (amountCon >=N){
             //Check max connections
             printf("Foreign Connection Rejected: Full Connections");
             bzero(word,10000);
@@ -102,7 +126,6 @@ void *listening(void* data){
         } else {
             //If there are connections to be had
             write(response,"Accepted",8);
-            printf("SERVER: Foreign Connection Accepted\n");
             //This is the part were we parse the command and write back correct information
             char *w = word;
             //Get the info sent
@@ -125,9 +148,9 @@ void *listening(void* data){
                 }
                 ++w;
             }
+            printf("SERVER: Foreign Connection (%s) Accepted\n", forName);
             //ADD DATA TO THE LIST
-            //TODO, if there is a dupe, update it instead
-            for (int x = 0; x < 5; ++x) {
+            for (int x = 0; x < N; ++x) {
                 //find first empty one
                 if (connects[x].id == -1) {
                     connects[x].id = x;
@@ -146,7 +169,7 @@ void *listening(void* data){
 //Return 1 on success, 0 on fail
 int connect(){
     //Check amount of connections
-    if (amountCon >= 5) {
+    if (amountCon >= N) {
         //5 connectsions, stop!
         printf("Max Connections Reached!\n");
         return 0;
@@ -166,7 +189,7 @@ int connect(){
         return 0;
     }
     //Check current connections to see if you are repeating
-    for (int x = 0; x < 5; ++x) {
+    for (int x = 0; x < N; ++x) {
         //if there is a connection
         if (connects[x].id != -1) {
             if (strcmp(conN,connects[x].name)==0 || strcmp(conN,connects[x].ip)==0){
@@ -250,7 +273,7 @@ int connect(){
     amountCon++;
     //add to list
     int x;
-    for (x = 0; x < 5;++x){
+    for (x = 0; x < N;++x){
         //find first empty one
         if (connects[x].id == -1) {
             connects[x].id = x;
@@ -278,7 +301,7 @@ void fetchIP(){
 //prompts for connection number, 
 //pings server with Alive, expects response
 int isAlive(){
-    printf("Please input a valid connection number between 1-5:\n");
+    printf("Please input a valid connection number between 1-%d:\n",N);
     int con;
     con = 0;
     scanf("%d",&con);
@@ -337,7 +360,7 @@ int bigDelete(int c) {
     struct hostent *server;
     
     //check for out of bounds
-    if (c < 0 || c > 5 ) {
+    if (c < 0 || c > N ) {
         printf("invalid Connection Number\n");
         return 0;
     }
@@ -368,10 +391,11 @@ int bigDelete(int c) {
         return 0;
     }
     char send[1000];
+    bzero(send,1000);
     strcat(send,"Delete-");
-    strcat(send,connects[c].name);
+    strcat(send,hostName);
     strcat(send,"-");
-    strcat(send,connects[c].ip);
+    strcat(send,hostIP);
 
     //delete it from Server
     //SENT: Delete-Name-IP
@@ -403,7 +427,7 @@ int main(int argc, char *argv[]){
     sprintf(hostPort,"%d",port);
     //init array of connections
     int x = 0;
-    for (x = 0; x < 5; ++x){
+    for (x = 0; x < N; ++x){
         connects[x].id = -1;
         strcpy(connects[x].name,"");
         strcpy(connects[x].ip,"");
@@ -436,8 +460,12 @@ int main(int argc, char *argv[]){
                         "9: Prints Creator Information\n");
                 break;
             case '2':
-                //TODO get rid of all the streams
+                //DONE
                 //call terminate on everything in list
+                for (int x = 0; x < N; ++x) {
+                    if (connects[x].id != -1) 
+                        bigDelete(x);
+                }
                 printf("Thank you for using this program\n");
                 exit(0);
                 break;
@@ -461,7 +489,7 @@ int main(int argc, char *argv[]){
                 //List all connections into and outof
                 //DONE
                 printf("Printing List of Connections:\n");
-                for (int x = 0; x < 5; ++x) {
+                for (int x = 0; x < N; ++x) {
                     //print list
                     if (connects[x].id != -1){
                         printf("Connection %d: %s - %s\n",
@@ -473,7 +501,7 @@ int main(int argc, char *argv[]){
                 //Terminate
                 int in;
                 in= -1;
-                printf("Enter the Conneciton Number of the Stream you wish to Delete. 1-5:\n");
+                printf("Enter the Conneciton Number of the Stream you wish to Delete. 1-%d:\n",N);
                 scanf("%d",&in);
                 in--;//put it in index
                 int r;
