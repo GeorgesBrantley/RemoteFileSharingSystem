@@ -26,6 +26,15 @@ char hostName[128];
 char hostPort[10];
 //Listening thread
 
+//deletes connection, c is index in connects
+void deleteConnection(int c){
+    //delete it in the connections list
+    connects[c].id = -1;
+    strcpy(connects[c].name, "");
+    strcpy(connects[c].ip, "");
+    strcpy(connects[c].port,"");
+}
+
 void *listening(void* data){
     int *port = (int*)data;
     int listenF; 
@@ -56,11 +65,36 @@ void *listening(void* data){
         
         //Bypass, checking if stream is alive
         if (strcmp(word,"Alive")==0) {
-            write(response,"Alive",5);
-
+            write(response,"ALIVE",5);
         }
-        //Check max connections
-        else if (amountCon >=5){
+        else if (strstr(word,"Delete-") != NULL) {
+           //Delete Instance in Connects 
+           char *w = word;
+           char *forName, *forIP;
+           w = (w+7*sizeof(char));// move past the delete-
+           forName = w;
+           int flag = 0;
+           while (*w != 0) {
+                if (*w == '-') {
+                    *w = 0;
+                    if (flag == 0) {
+                        forIP = (w+1);
+                        flag++;
+                    }
+                }
+                ++w;
+            }
+            printf("TEST: %s - %s\n",forName, forIP);
+            //armed with knowledge, delete it from the pool!
+            for (int x = 0; x < 5; ++x){
+                if (strcmp(connects[x].ip,forIP)==0 
+                && strcmp(connects[x].name,forName) ==0) {
+                    deleteConnection(x);
+                    break;
+                }
+            }
+        } else if (amountCon >=5){
+            //Check max connections
             printf("Foreign Connection Rejected: Full Connections");
             bzero(word,10000);
             strcpy(word,"Denied");
@@ -70,7 +104,6 @@ void *listening(void* data){
             write(response,"Accepted",8);
             printf("SERVER: Foreign Connection Accepted\n");
             //This is the part were we parse the command and write back correct information
-            //TODO: Update List, update max connections
             char *w = word;
             //Get the info sent
             //RECIEVED: NAME-IP-PORT-, add to list
@@ -93,6 +126,7 @@ void *listening(void* data){
                 ++w;
             }
             //ADD DATA TO THE LIST
+            //TODO, if there is a dupe, update it instead
             for (int x = 0; x < 5; ++x) {
                 //find first empty one
                 if (connects[x].id == -1) {
@@ -239,34 +273,22 @@ void fetchIP(){
     struct in_addr addr;
     memcpy(&addr,h->h_addr_list[0],sizeof(struct in_addr));
     strcpy(hostIP,inet_ntoa(addr));
-    /*
-    OLD WAY
-    FILE *fp;
-    //write ip to file, read file, delete file
-    system("ifconfig | grep inet | awk '{print $2}'  | head -1 >> ip ");
-    fp = fopen("ip","r");
-    char myIp[30];
-    fgets(myIp,30,fp);
-    char *ip = myIp;
-    system("rm -f ip");
-    //remove ip file
-    strcpy(hostIP,myIp);
-    */
 }
 
 //prompts for connection number, 
 //pings server with Alive, expects response
 int isAlive(){
-    printf("Please input a valid connection number between 1-5");
-    int con = 0;
-    scanf("%d",con);
+    printf("Please input a valid connection number between 1-5:\n");
+    int con;
+    con = 0;
+    scanf("%d",&con);
     //fix for indexing
     con--;
     //check if connection is valid
     if (connects[con].id == -1) {
         //invalid
         printf("Invalid input\n");
-        return 0;
+        return -1;
     }
     //valid input
     //create socket to ping server
@@ -278,15 +300,88 @@ int isAlive(){
     sockfd = socket(AF_INET, SOCK_STREAM,0);
     if (sockfd < 0){
         printf("Error Opening Socket");
-        return 0;
+        return con;
     }
     server = gethostbyname(connects[con].name);
     if (server ==NULL) {
-        printf("Error, no such host\n");
-        return 0;
+        printf("Connection is Dead\n");
+        return con;
+    }
+    bzero((char*)&serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,server->h_length);
+    serv_addr.sin_port = htons(portn);
+
+    //connect!
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+        printf("Connection is Dead\n");
+        return con;
     }
 
+    write(sockfd,"Alive",5);
+    char resp[1000];
+    read(sockfd,resp,1000);
+    if (strstr(resp,"ALIVE") != NULL) {
+        printf("Connection is Alive\n");
+        return -1;
+    }
 }
+
+//SendDelete tells the host to delete its connection
+//Also deletes home connection
+int bigDelete(int c) {
+    //send ping to host
+    //create socket to ping server
+    int sockfd, portn, n;
+    struct sockaddr_in serv_addr;
+    struct hostent *server;
+    
+    //check for out of bounds
+    if (c < 0 || c > 5 ) {
+        printf("invalid Connection Number\n");
+        return 0;
+    }
+    //check for valid connection
+    if (connects[c].id == -1) {
+        printf("Invalid Connection Number\n");
+        return 0;
+    }
+    portn = atoi(connects[c].port);
+    sockfd = socket(AF_INET, SOCK_STREAM,0);
+    if (sockfd < 0){
+        printf("Error Opening Socket");
+        return 0;
+    }
+    server = gethostbyname(connects[c].name);
+    if (server ==NULL) {
+        printf("Connection is Dead\n");
+        return 0;
+    }
+    bzero((char*)&serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,server->h_length);
+    serv_addr.sin_port = htons(portn);
+
+    //connect!
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+        printf("Connection is Dead\n");
+        return 0;
+    }
+    char send[1000];
+    strcat(send,"Delete-");
+    strcat(send,connects[c].name);
+    strcat(send,"-");
+    strcat(send,connects[c].ip);
+
+    //delete it from Server
+    //SENT: Delete-Name-IP
+    write(sockfd,send,sizeof(send));
+
+    //delete it from home
+    deleteConnection(c);
+    return 1; 
+}
+
 //Starts listening Code, Starts UI thread
 int main(int argc, char *argv[]){
     int port = 0;
@@ -376,11 +471,23 @@ int main(int argc, char *argv[]){
                 break;
             case '7':
                 //Terminate
-                //TODO: get user input
+                int in;
+                in= -1;
+                printf("Enter the Conneciton Number of the Stream you wish to Delete. 1-5:\n");
+                scanf("%d",&in);
+                in--;//put it in index
+                int r;
+                r=bigDelete(in); 
+                if (r){
+                    in++;//put it to human location
+                    printf("Connection %d Has Been Deleted",in);
+                }
                 break;
             case '8':
-                //TODO: get user input
-                isAlive();
+                int i;
+                i= isAlive();
+                if (i != -1)
+                    deleteConnection(i);
                 break;
             case '9':
                 //DONE
