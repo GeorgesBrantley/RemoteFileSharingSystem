@@ -28,10 +28,6 @@ char hostIP[30];
 char hostName[128];
 char hostPort[10];
 
-//TODO: GO OVER REQUIREMENTS
-//TODO: ERROR MESSAGES
-//TODO: README
-
 //deletes connection, c is index in connects
 void deleteConnection(int c){
     //delete it in the connections list
@@ -440,7 +436,8 @@ int main(int argc, char *argv[]){
     while (1) {
         char *input;
         *input = 0;
-        printf("Choose an option, input corresponding number:\n(1) HELP\n(2) EXIT\n(3) MYIP\n(4) MYPORT\n(5) CONNECT\n(6) LIST\n(7) TERMINATE\n(8) ISALIVE\n(9) CREATOR\n");
+        printf("Choose an option, input corresponding number:\n(1) HELP\n(2) EXIT\n(3) MYIP\n(4) MYPORT\n(5) CONNECT\n(6) LIST\n(7) TERMINATE\n(8) ISALIVE\n(9) CREATOR\n"
+                "(a) GENERATE\n(b) UPLOAD\n(c) FORIEGN FILE CHECK\n(d) DOWNLOAD\n");
 
         scanf("%c",input); 
         switch(*input){
@@ -455,7 +452,11 @@ int main(int argc, char *argv[]){
                         "6: Lists current Connections To and From this Server\n"
                         "7: Deletes A Connection, Promps for Connection Number\n"
                         "8: Promps for Connection, Checks if it is still alive\n"
-                        "9: Prints Creator Information\n");
+                        "9: Prints Creator Information\n"
+                        "a: Promps for a fiel name, and a file size. File saved in Uploads/\n"
+                        "b: Promps for connection ID and a file name to send to this connection\n"
+                        "c: Promps for connection ID, returns list of files connection has\n"
+                        "d: Promps for connection ID and file name, Saves it to Download folder\n");
                 break;
             case '2':
                 //DONE
@@ -515,7 +516,7 @@ int main(int argc, char *argv[]){
                 if (i != -1)
                     deleteConnection(i);
                 break;
-            case '9':
+            case "9":
                 //DONE
                 printf("CREATOR: Georges Brantley, EMAIL: gbrantle@purdue.edu\n");
                 break;
