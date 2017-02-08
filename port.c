@@ -41,12 +41,10 @@ void deleteConnection(int c){
     strcpy(connects[c].port,"");
     amountCon--;
     if (amountCon != 0){
-        printf("HEYHEY\n");
         //move shit down 
         for (int y = 0; y<N; ++y){
         for (int x = 0; x < N-1; ++x) {
             if(connects[x].id == -1 && connects[x+1].id !=-1) {
-                printf("YOUYOU\n");
                 //sift down
                 connects[x] = connects[x+1];
                 connects[x].id--;
@@ -119,10 +117,8 @@ void *listening(void* data){
             }
         } else if (amountCon >=N){
             //Check max connections
-            printf("Foreign Connection Rejected: Full Connections");
-            bzero(word,10000);
-            strcpy(word,"Denied");
-            write(response,word, strlen(word));
+            printf("Foreign Connection Rejected: Full Connections\n");
+            write(response,"Denied", 6);
         } else {
             //If there are connections to be had
             write(response,"Accepted",8);
@@ -322,12 +318,12 @@ int isAlive(){
     portn = atoi(connects[con].port);
     sockfd = socket(AF_INET, SOCK_STREAM,0);
     if (sockfd < 0){
-        printf("Error Opening Socket");
+        printf("Error Opening Socket\nConnection Deleted\n");
         return con;
     }
     server = gethostbyname(connects[con].name);
     if (server ==NULL) {
-        printf("Connection is Dead\n");
+        printf("Connection is Inactive\nConnection Deleted\n");
         return con;
     }
     bzero((char*)&serv_addr, sizeof(serv_addr));
@@ -337,7 +333,7 @@ int isAlive(){
 
     //connect!
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
-        printf("Connection is Dead\n");
+        printf("Connection is Inactive\nConnection Deleted\n");
         return con;
     }
 
@@ -345,7 +341,7 @@ int isAlive(){
     char resp[1000];
     read(sockfd,resp,1000);
     if (strstr(resp,"ALIVE") != NULL) {
-        printf("Connection is Alive\n");
+        printf("Connection is Active\n");
         return -1;
     }
 }
@@ -377,7 +373,8 @@ int bigDelete(int c) {
     }
     server = gethostbyname(connects[c].name);
     if (server ==NULL) {
-        printf("Connection is Dead\n");
+        printf("Connection is Inactive\nConnection Deleted\n");
+        deleteConnection(c);
         return 0;
     }
     bzero((char*)&serv_addr, sizeof(serv_addr));
@@ -387,7 +384,8 @@ int bigDelete(int c) {
 
     //connect!
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
-        printf("Connection is Dead\n");
+        printf("Connection is Inactive. Connection Deleted\n");
+        deleteConnection(c);
         return 0;
     }
     char send[1000];
