@@ -86,6 +86,25 @@ void *listening(void* data){
         if (strcmp(word,"Alive")==0) {
             write(response,"ALIVE",5);
         }
+        else if (strstr(word,"ListFiles") != NULL) {
+            //List files in /Upload Directory, send it back
+            //TODO
+            //Read all the files, print them out to a txt
+            system("ls Upload/ > readUp.txt");
+            //read txt file
+            FILE *fp;
+            fp = fopen("readUp.txt","rb");
+            fseek(fp,0,SEEK_END);
+            long fsize = ftell(fp);
+            fseek(fp,0,SEEK_SET);
+            bzero(word,1000);
+            fread(word,fsize,1,fp);
+            //send info back
+            write(response,word,1000); 
+            //delete txt file
+            fclose(fp);
+            system("rm -f readUp.txt");
+        }
         else if (strstr(word,"Delete-") != NULL) {
            //Delete Instance in Connects 
            char *w = word;
@@ -400,6 +419,86 @@ int bigDelete(int c) {
     return 1; 
 }
 
+//create a file in uploads
+void create(){
+    char name[100];
+    char size[10];
+    printf("Please enter a file name:\n");
+    scanf("%s",name);
+    printf("Please enter size of the file in KBytes (1=512 bytes):\n");
+    scanf("%s",size);
+    printf("Name Entered: %s\n",name);
+    printf("Size Entered: %s\n",size);
+    
+    char touch [110];
+    strcpy(touch, "touch Upload/");
+    //strcat(touch,name);
+    char command[200];
+    strcpy(command,"dd if=/dev/zero of=Upload/");
+    strcat(command,name);
+    strcat(command," count=");
+    strcat(command,size);
+    system(command);
+}
+
+int find_files(){
+    //get info
+    if (amountCon == 0) {
+        printf("No Connections!\n"); 
+        return 0;
+    }
+    int con;
+    printf("Which Connection do you wish to query? Insert a Number (1-5):\n");
+    scanf("%d",&con);
+    //make it index
+    con--;
+    //check for good connection
+    if (con >= amountCon) {
+        printf("Connection Does Not Exists\n");
+        return 0;
+    }
+    
+    //Check if connection is alive
+    int check = isAlive(con);
+    if (check == -1) {
+        printf("Action Failed\n");
+        return 0;
+    }
+    int sockfd, portn, n;
+    struct sockaddr_in serv_addr;
+    struct hostent *server;
+
+    //Ping server
+    portn = atoi(connects[con].port);
+    sockfd = socket(AF_INET, SOCK_STREAM,0);
+    if (sockfd < 0){
+        printf("Error Opening Socket\nConnection Deleted\n");
+        return con;
+    }
+    server = gethostbyname(connects[con].name);
+    if (server ==NULL) {
+        printf("Connection is Inactive\nConnection Deleted\n");
+        return con;
+    }
+    bzero((char*)&serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,server->h_length);
+    serv_addr.sin_port = htons(portn);
+
+    //connect!
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+        printf("Connection is Inactive\nConnection Deleted\n");
+        return con;
+    }
+
+    write(sockfd,"ListFiles",9);
+    char resp[1000];
+    read(sockfd,resp,1000);
+    
+    //Print List of Files
+    printf("Files on Foriegn Server:\n%s\n",resp);
+    return 1;
+}
 //Starts listening Code, Starts UI thread
 int main(int argc, char *argv[]){
     int port = 0;
@@ -516,10 +615,24 @@ int main(int argc, char *argv[]){
                 if (i != -1)
                     deleteConnection(i);
                 break;
-            case "9":
+            case '9':
                 //DONE
                 printf("CREATOR: Georges Brantley, EMAIL: gbrantle@purdue.edu\n");
                 break;
+            case 'a':
+                fflush(stdin);
+                create(); 
+                break;
+            case 'b':
+                break;
+
+            case 'c':
+                find_files();
+                break;
+
+            case 'd':
+                break;
+
             default:
                 printf("Input not recognized. Please insert a number 1-9!\n");
         }
