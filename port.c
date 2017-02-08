@@ -88,7 +88,6 @@ void *listening(void* data){
         }
         else if (strstr(word,"ListFiles") != NULL) {
             //List files in /Upload Directory, send it back
-            //TODO
             //Read all the files, print them out to a txt
             system("ls Upload/ > readUp.txt");
             //read txt file
@@ -425,7 +424,7 @@ void create(){
     char size[10];
     printf("Please enter a file name:\n");
     scanf("%s",name);
-    printf("Please enter size of the file in KBytes (1=512 bytes):\n");
+    printf("Please enter size of the file in Blocks (1=512 bytes):\n");
     scanf("%s",size);
     printf("Name Entered: %s\n",name);
     printf("Size Entered: %s\n",size);
@@ -459,8 +458,7 @@ int find_files(){
     }
     
     //Check if connection is alive
-    int check = isAlive(con);
-    if (check == -1) {
+    if (isAlive(con) != -1) {
         printf("Action Failed\n");
         return 0;
     }
@@ -498,6 +496,39 @@ int find_files(){
     //Print List of Files
     printf("Files on Foriegn Server:\n%s\n",resp);
     return 1;
+}
+
+int upload(){
+    //TODO
+    //Get information
+    int con = 0;
+    printf("Input a valid connection number between 1-%d:\n",N);
+    scanf("%d",&con);
+    con--; //index it
+    //check for valid connection
+    if (connects[con].id == -1) {
+        printf("Invalid Connection\n");
+        return 0;
+    }
+    if (isAlive(con) != -1) {
+        //conection is dead
+        printf("Connection is Dead, exiting upload\n");
+        return 0;
+    }
+    printf("Input a valid File Name to Download:\n");
+    char fileName[100];
+    scanf("%s",fileName);
+
+    //Contact Connection
+    
+
+    //TODO
+    //What needs to be sent: 
+    //META:Name of file, Size of file, maybe amount sending per time
+    //THen just read the contents of the file and send them piece by piece
+    //The read will collect this information then write it to a file
+    //Config.txt will store a simple variable that tells how much we should send at a time
+
 }
 //Starts listening Code, Starts UI thread
 int main(int argc, char *argv[]){
