@@ -1,4 +1,4 @@
-makesocks: port.c
-	g++ -pthread -o rfss port.c
+makesocks: rfss.c
+	g++ -pthread -o rfss rfss.c
 clean:
 	rm -f rfss
