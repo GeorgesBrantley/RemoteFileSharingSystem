@@ -1,6 +1,7 @@
 #include <sys/socket.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <netinet/in.h>
@@ -109,22 +110,28 @@ void *listening(void* data){
         }
         else if (strstr(word,"UPLOAD") != NULL) {
             //UPLOAD
-            //TODO
             printf("A File is being Uploaded\n");
-            //Read Meta Data: UPLOAD FILENAME HOSTNAME  
+            //Read Meta Data: UPLOAD FILENAME HOSTNAME SIZE 
             char *w = word;
-            char *fileName, *hostName;
+            char *fileName, *forName, *strBytes;
             w += 7; //move past the UPLOAD
             fileName = w;
             int flag = 0;
             while (*w != 0){
                 if (*w == ' ') {
                     *w = 0;
-                    hostName = (w+1);
-                    break;
+                    if (flag == 0){
+                        forName = (w+1);
+                        flag++;
+                    } else {
+                        strBytes = (w+1);
+                        break;
+                    }
                 }
                 ++w;
             }
+            //GET SIZE
+            int bytes = atoi(strBytes); 
             //delete file (overwrite?)
             char command[100];
             strcat(command, "rm -f Download/");
@@ -149,6 +156,10 @@ void *listening(void* data){
             bzero(word,1000);
             //LOOP:
             int i = 0;
+            struct timeval start;
+            struct timeval end;
+            gettimeofday(&start,NULL);
+
             while (strcmp(word,"DONE") != 0){
                 if (i > 0)
                     fputs(word,fp);
@@ -158,10 +169,19 @@ void *listening(void* data){
                 write(response,"CHECK",5);
                 read(response,word,1000);
             } 
+            gettimeofday(&end,NULL);
+
             //Send check to client
             fclose(fp);
             //DONE, TODO print stats
+            int bits = (bytes*8);
+            int seconds =  (end.tv_usec - start.tv_usec);
+            float per = bits/seconds/1000000;
 
+            printf("Rx (%s): %s -> %s, File Size: %d"
+            " Bytes, Time Taken: %d Seconds, Rx Rate: %f Bits/Second\n"
+            , hostName, forName, hostName,
+            bytes,(int*)(end.tv_usec - start.tv_usec),per);
         }
         else if (strstr(word,"DOWNLOAD") !=NULL) {
             //DOWNLOAD
@@ -600,7 +620,13 @@ int upload(){
         printf("File Does not Exist\n");
         return 0;
     }
-
+    
+    //get file size
+    FILE *sizeFind = fopen(filePath,"rb");
+    fseek(sizeFind,0L, SEEK_END);
+    int bytes = ftell(sizeFind);
+    fclose(sizeFind);
+    
     //Get Sending size from config.txt
     FILE *config = fopen("config.txt","r");
     if (config == NULL){
@@ -642,13 +668,17 @@ int upload(){
     }
 
     //META STRING
-    //UPLOAD FILENAME HOSTNAME
+    //UPLOAD FILENAME HOSTNAME SIZE
     char meta[500];
     strcpy(meta,"UPLOAD ");
     strcat(meta,fileName);
     strcat(meta," ");
     strcat(meta,hostName);
-    
+    char strSize[50];
+    sprintf(strSize,"%d",bytes);
+    strcat(meta, " ");
+    strcat(meta,strSize);
+
     write(sockfd,meta,strlen(meta));
 
     //META response
@@ -665,17 +695,30 @@ int upload(){
     //LOOP
     char readF[msgSize];
     bzero(readF,msgSize);
+    struct timeval start;
+    struct timeval end;
+    gettimeofday(&start,NULL);
+
     while (fgets(readF,msgSize,fp) != NULL) {
         //while we can pull stuff out of the file
         read(sockfd,resp,100);
         write(sockfd,readF,msgSize);
     }
+    gettimeofday(&end,NULL);
+
     //our file is finished!
     read(sockfd,resp,100);
     write(sockfd,"DONE",4);
 
     //TODO end counter
     //print stats
+    int bits = (bytes*8);
+    int seconds =  (end.tv_usec - start.tv_usec);
+    float per = bits/seconds/1000000; 
+    printf("Tx (%s): %s -> %s,"
+    "File Size: %d Bytes, Time Taken: %d uSeconds, Tx Rate: %f Bits/Second\n",
+    hostName, hostName, connects[con].name,
+    bytes,(int*)(end.tv_usec - start.tv_usec),per);
 }
 //Starts listening Code, Starts UI thread
 int main(int argc, char *argv[]){
