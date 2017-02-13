@@ -172,14 +172,29 @@ void *listening(void* data){
 
             //Send check to client
             fclose(fp);
-            int bits = (bytes*8);
+            
             float seconds =  (end.tv_usec - start.tv_usec)*(.000001);
-            float per = bits/seconds;
+            if (end.tv_usec - start.tv_usec > 0) {
+                int bits = (bytes*8);
+                float per = bits/seconds;
 
-            printf("\nRx (%s): %s -> %s \nFile Size: %d"
-            " Bytes \nTime Taken: %d uSeconds \nRx Rate: %.0f Bits/Second\n"
-            , hostName, forName, hostName,
-            bytes,(int*)(end.tv_usec - start.tv_usec),per);
+                printf("\nRx (%s): %s -> %s \n"
+                "File Size: %d Bytes \n"
+                "Time Taken: %d uSeconds \n"
+                "Rx Rate: %.0f Bits/Second\n"
+                ,hostName,forName, hostName,bytes,(end.tv_usec - start.tv_usec),per);
+            } else {
+                seconds = (end.tv_sec - start.tv_sec);
+                int bits = (bytes*8);
+                float per = bits/seconds;
+
+                printf("\nRx (%s): %s -> %s \n"
+                "File Size: %d Bytes \n"
+                "Time Taken: %d Seconds \n"
+                "Rx Rate: %.0f Bits/Second\n"
+                ,hostName,forName, hostName,bytes,(end.tv_usec - start.tv_usec),per);
+
+            }
         }
         else if (strstr(word,"DOWNLOAD") !=NULL) {
             //DOWNLOAD
@@ -468,12 +483,12 @@ int checkAlive(int con){
     portn = atoi(connects[con].port);
     sockfd = socket(AF_INET, SOCK_STREAM,0);
     if (sockfd < 0){
-        printf("Error Opening Socket\nConnection Deleted\n");
+        printf("Error Opening Socket\n");
         return con;
     }
     server = gethostbyname(connects[con].name);
     if (server ==NULL) {
-        printf("Connection is Inactive\nConnection Deleted\n");
+        printf("Connection is Inactive\n");
         return con;
     }
     bzero((char*)&serv_addr, sizeof(serv_addr));
@@ -483,7 +498,7 @@ int checkAlive(int con){
 
     //connect!
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
-        printf("Connection is Inactive\nConnection Deleted\n");
+        printf("Connection is Inactive\n");
         return con;
     }
 
@@ -756,14 +771,28 @@ int upload(){
     write(sockfd,"DONE",4);
 
     //print stats
-    int bits = (bytes*8);
-    float seconds =  (end.tv_usec - start.tv_usec)*(.000001);
-    float per = bits/seconds; 
 
-    printf("\nTx (%s): %s -> %s\n"
-    "File Size: %d Bytes \nTime Taken: %d uSeconds \nTx Rate: %.0f Bits/Second\n",
-    hostName, hostName, connects[con].name,
-    bytes,(int*)(end.tv_usec - start.tv_usec),per);
+    float seconds =  (end.tv_usec - start.tv_usec)*(.000001);
+    if (end.tv_usec - start.tv_usec > 0) {
+        int bits = (bytes*8);
+        float per = bits/seconds; 
+
+        printf("\nTx (%s): %s -> %s\n"
+        "File Size: %d Bytes \n"
+        "Time Taken: %d uSeconds \n"
+        "Tx Rate: %.0f Bits/Second\n",
+        hostName, hostName, connects[con].name,bytes,(end.tv_usec - start.tv_usec),per);
+    }else {
+        seconds = (end.tv_sec - start.tv_sec);
+        int bits = (bytes*8);
+        float per = bits/seconds; 
+
+        printf("\nTx (%s): %s -> %s\n"
+        "File Size: %d Bytes \n"
+        "Time Taken: %d Seconds \n"
+        "Tx Rate: %.0f Bits/Second\n",
+        hostName, hostName, connects[con].name,bytes,(end.tv_sec - start.tv_sec),per);
+    }
 }
 
 int download() {
