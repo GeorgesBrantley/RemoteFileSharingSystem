@@ -174,7 +174,7 @@ void *listening(void* data){
             fclose(fp);
             
             float seconds =  (end.tv_usec - start.tv_usec)*(.000001);
-            if (end.tv_usec - start.tv_usec > 0) {
+            if (end.tv_usec - start.tv_usec > 0 && end.tv_sec - start.tv_sec <= 2) {
                 int bits = (bytes*8);
                 float per = bits/seconds;
 
@@ -192,7 +192,7 @@ void *listening(void* data){
                 "File Size: %d Bytes \n"
                 "Time Taken: %d Seconds \n"
                 "Rx Rate: %.0f Bits/Second\n"
-                ,hostName,forName, hostName,bytes,(end.tv_usec - start.tv_usec),per);
+                ,hostName,forName, hostName,bytes,(end.tv_sec - start.tv_sec),per);
 
             }
         }
@@ -773,7 +773,7 @@ int upload(){
     //print stats
 
     float seconds =  (end.tv_usec - start.tv_usec)*(.000001);
-    if (end.tv_usec - start.tv_usec > 0) {
+    if (end.tv_usec - start.tv_usec > 0 && end.tv_sec - start.tv_sec <= 2) {
         int bits = (bytes*8);
         float per = bits/seconds; 
 
