@@ -175,11 +175,11 @@ void *listening(void* data){
             fclose(fp);
             //DONE, TODO print stats
             int bits = (bytes*8);
-            int seconds =  (end.tv_usec - start.tv_usec);
-            float per = bits/seconds/1000000;
+            float seconds =  (end.tv_usec - start.tv_usec)*(.000001);
+            float per = bits/seconds;
 
-            printf("Rx (%s): %s -> %s, File Size: %d"
-            " Bytes, Time Taken: %d Seconds, Rx Rate: %f Bits/Second\n"
+            printf("Rx (%s): %s -> %s \nFile Size: %d"
+            " Bytes \nTime Taken: %d uSeconds \nRx Rate: %.0f Bits/Second\n"
             , hostName, forName, hostName,
             bytes,(int*)(end.tv_usec - start.tv_usec),per);
         }
@@ -713,10 +713,11 @@ int upload(){
     //TODO end counter
     //print stats
     int bits = (bytes*8);
-    int seconds =  (end.tv_usec - start.tv_usec);
-    float per = bits/seconds/1000000; 
-    printf("Tx (%s): %s -> %s,"
-    "File Size: %d Bytes, Time Taken: %d uSeconds, Tx Rate: %f Bits/Second\n",
+    float seconds =  (end.tv_usec - start.tv_usec)*(.000001);
+    float per = bits/seconds; 
+
+    printf("Tx (%s): %s -> %s\n"
+    "File Size: %d Bytes \nTime Taken: %d \nuSeconds \nTx Rate: %.0f Bits/Second\n",
     hostName, hostName, connects[con].name,
     bytes,(int*)(end.tv_usec - start.tv_usec),per);
 }
