@@ -1,6 +1,7 @@
 #include <sys/socket.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <netinet/in.h>
@@ -13,7 +14,7 @@
 //Globals
 //MAX CONNECTIONS
 #define N 5
-
+#define MAX 1000
 //Array of strings, 20 strings of 25 length
 struct tag{
     int id; 
@@ -28,9 +29,7 @@ char hostIP[30];
 char hostName[128];
 char hostPort[10];
 
-//TODO: GO OVER REQUIREMENTS
-//TODO: ERROR MESSAGES
-//TODO: README
+int checkAlive(int);
 
 //deletes connection, c is index in connects
 void deleteConnection(int c){
@@ -63,7 +62,7 @@ void *listening(void* data){
     int *port = (int*)data;
     int listenF; 
     int response;
-    char word[1000];
+    char word[MAX];
 
     //create Socket
     struct sockaddr_in servaddr;
@@ -82,13 +81,164 @@ void *listening(void* data){
     listen(listenF,N);
     
     //This will be in the loop
+    //listenloop
     while(1){
         response = accept(listenF, (struct sockaddr*) NULL, NULL);
-        bzero(word, 1000);
-        read(response,word, 1000);
+        bzero(word, MAX);
+        read(response,word, MAX);
         //Bypass, checking if stream is alive
         if (strcmp(word,"Alive")==0) {
             write(response,"ALIVE",5);
+        }
+        else if (strstr(word,"ListFiles") != NULL) {
+            //List files in /Upload Directory, send it back
+            //Read all the files, print them out to a txt
+            system("ls Upload/ > readUp.txt");
+            //read txt file
+            FILE *fp;
+            fp = fopen("readUp.txt","rb");
+            fseek(fp,0,SEEK_END);
+            long fsize = ftell(fp);
+            fseek(fp,0,SEEK_SET);
+            bzero(word,MAX);
+            fread(word,fsize,1,fp);
+            //send info back
+            write(response,word,MAX); 
+            //delete txt file
+            fclose(fp);
+            system("rm -f readUp.txt");
+        }
+        else if (strstr(word,"UPLOAD") != NULL) {
+            //UPLOAD
+            //Read Meta Data: UPLOAD FILENAME HOSTNAME SIZE 
+            char *w = word;
+            char *fileName, *forName, *strBytes;
+            w += 7; //move past the UPLOAD
+            fileName = w;
+            int flag = 0;
+            while (*w != 0){
+                if (*w == ' ') {
+                    *w = 0;
+                    if (flag == 0){
+                        forName = (w+1);
+                        flag++;
+                    } else {
+                        strBytes = (w+1);
+                        break;
+                    }
+                }
+                ++w;
+            }
+            printf("File '%s' is being Uploaded from %s\n",fileName, forName);
+            //GET SIZE
+            int bytes = atoi(strBytes); 
+            //delete file (overwrite?)
+            char command[100];
+            strcat(command, "rm -f Download/");
+            strcat(command,fileName);
+            system(command); 
+            //make file
+            bzero(command,100);
+            strcat(command, "touch Download/");
+            strcat(command,fileName);
+            system(command); 
+            
+            //file pointer to file
+            char filePath[200];
+            strcpy(filePath,"Download/");
+            strcat(filePath,fileName);
+
+            FILE *fp = fopen(filePath,"w"); 
+            //notify the uploader you are ready
+            write(response,"READY",5);
+
+            bzero(word,MAX);
+            //LOOP:
+            int i = 0;
+            struct timeval start;
+            struct timeval end;
+            gettimeofday(&start,NULL);
+
+            while (strcmp(word,"DONE") != 0){
+                if (i > 0)
+                    fputs(word,fp);
+                i++;
+                bzero(word,MAX);
+                //get response
+                write(response,"CHECK",5);
+                read(response,word,MAX);
+            } 
+            gettimeofday(&end,NULL);
+
+            //Send check to client
+            fclose(fp);
+            
+            //float seconds =  (end.tv_usec - start.tv_usec)*(.000001);
+            long double t = (end.tv_sec*1e6 + end.tv_usec) - (start.tv_sec*1e6 + start.tv_usec);
+            double seconds = t*.0000001;
+            float bits = (bytes*8);
+            float per = bits/seconds*.1;
+
+            printf("\nRx (%s): %s -> %s \n"
+            "File Size: %d Bytes \n"
+            "Time Taken: %.0Lf uSeconds \n"
+            "Rx Rate: %.0f Bits/Second\n"
+            ,hostName,forName, hostName,bytes,t,per);
+        }
+        else if (strstr(word,"DOWNLOAD") !=NULL) {
+            //DOWNLOAD
+            //META: DOWNLOAD FILENAME ServerName
+            char *w = word;
+            char *fileName, *forName;
+            w += 9; //move past the UPLOAD
+            fileName = w;
+            while (*w != 0){
+                if (*w == ' ') {
+                    *w = 0;
+                    forName = (w+1);
+                    break;
+                }
+                ++w;
+            }
+            
+            //check if file exists
+            //UPLOAD -> DOWNLOADS
+            char filePath[200];
+            strcpy(filePath,"Upload/");
+            strcat(filePath,fileName);
+            FILE *fp = fopen(filePath,"r");
+            if (fp == NULL) {
+                //end the madness, FILE NOT FOUND
+                write(response,"FAIL",4);
+            }else{
+                write(response,"FOUND",5);
+                //FILE FOUND
+                printf("File '%s' is being Downloaded by '%s'\n",fileName,forName);
+                //get config.txt
+                //Get Sending size from config.txt
+                FILE *config = fopen("config.txt","r");
+                if (config == NULL){
+                    printf("config.txt file not found!\n");
+                    return 0;
+                }
+                char number[100];
+                fgets(number,100,config);
+                int msgSize = atoi(number);
+                printf("Sending Size is %d\n",msgSize);
+
+                //START LOOP, SEND to USER
+                bzero(word,MAX);
+                char readF[msgSize];
+
+                while (fgets(readF,msgSize,fp) != NULL) {
+                    read(response,word,MAX);
+                    write(response,readF,msgSize);
+                }
+                read(response,word,MAX);
+                write(response,"DONE",4);
+
+                printf("Download Complete!\n");
+            }
         }
         else if (strstr(word,"Delete-") != NULL) {
            //Delete Instance in Connects 
@@ -235,9 +385,9 @@ int connect(){
         return 0;
     
     //Write info
-    char info[1000];
+    char info[MAX];
     //INFO: NAME IP PORT 
-    bzero(info,1000);
+    bzero(info,MAX);
     strcat(info,hostName);
     
     strcat(info,"-");
@@ -248,7 +398,7 @@ int connect(){
     int a = write(sockfd,info,strlen(info));
     if (a<0)
         return 0;
-    bzero(info,1000);
+    bzero(info,MAX);
     //get info
     a = read(sockfd, info,9999);
     if (a<0)
@@ -309,6 +459,10 @@ int isAlive(){
         printf("Invalid input\n");
         return -1;
     }
+    return checkAlive(con);
+}
+
+int checkAlive(int con){
     //valid input
     //create socket to ping server
     int sockfd, portn, n;
@@ -318,12 +472,12 @@ int isAlive(){
     portn = atoi(connects[con].port);
     sockfd = socket(AF_INET, SOCK_STREAM,0);
     if (sockfd < 0){
-        printf("Error Opening Socket\nConnection Deleted\n");
+        printf("Error Opening Socket\n");
         return con;
     }
     server = gethostbyname(connects[con].name);
     if (server ==NULL) {
-        printf("Connection is Inactive\nConnection Deleted\n");
+        printf("Connection is Inactive\n");
         return con;
     }
     bzero((char*)&serv_addr, sizeof(serv_addr));
@@ -333,13 +487,13 @@ int isAlive(){
 
     //connect!
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
-        printf("Connection is Inactive\nConnection Deleted\n");
+        printf("Connection is Inactive\n");
         return con;
     }
 
     write(sockfd,"Alive",5);
-    char resp[1000];
-    read(sockfd,resp,1000);
+    char resp[MAX];
+    read(sockfd,resp,MAX);
     if (strstr(resp,"ALIVE") != NULL) {
         printf("Connection is Active\n");
         return -1;
@@ -388,8 +542,8 @@ int bigDelete(int c) {
         deleteConnection(c);
         return 0;
     }
-    char send[1000];
-    bzero(send,1000);
+    char send[MAX];
+    bzero(send,MAX);
     strcat(send,"Delete-");
     strcat(send,hostName);
     strcat(send,"-");
@@ -404,6 +558,319 @@ int bigDelete(int c) {
     return 1; 
 }
 
+//create a file in uploads
+void create(){
+    char name[100];
+    char size[10];
+    printf("Please enter a file name:\n");
+    scanf("%s",name);
+    printf("Please enter size of the file in Blocks (1=512 bytes):\n");
+    scanf("%s",size);
+    printf("Name Entered: %s\n",name);
+    printf("Size Entered: %s\n",size);
+    
+    char touch [110];
+    strcpy(touch, "touch Upload/");
+    //strcat(touch,name);
+    char command[200];
+    strcpy(command,"dd if=/dev/zero of=Upload/");
+    strcat(command,name);
+    strcat(command," count=");
+    strcat(command,size);
+    system(command);
+}
+
+int find_files(){
+    //get info
+    if (amountCon == 0) {
+        printf("No Connections!\n"); 
+        return 0;
+    }
+    int con;
+    printf("Which Connection do you wish to query? Insert a Number (1-5):\n");
+    scanf("%d",&con);
+    //make it index
+    con--;
+    //check for good connection
+    if (con >= amountCon) {
+        printf("Connection Does Not Exists\n");
+        return 0;
+    }
+    
+    //Check if connection is alive
+    if (checkAlive(con) != -1) {
+        printf("Action Failed\n");
+        return 0;
+    }
+    int sockfd, portn, n;
+    struct sockaddr_in serv_addr;
+    struct hostent *server;
+
+    //Ping server
+    portn = atoi(connects[con].port);
+    sockfd = socket(AF_INET, SOCK_STREAM,0);
+    if (sockfd < 0){
+        printf("Error Opening Socket\nConnection Deleted\n");
+        return con;
+    }
+    server = gethostbyname(connects[con].name);
+    if (server ==NULL) {
+        printf("Connection is Inactive\nConnection Deleted\n");
+        return con;
+    }
+    bzero((char*)&serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,server->h_length);
+    serv_addr.sin_port = htons(portn);
+
+    //connect!
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+        printf("Connection is Inactive\nConnection Deleted\n");
+        return con;
+    }
+
+    write(sockfd,"ListFiles",9);
+    char resp[MAX];
+    read(sockfd,resp,MAX);
+    
+    //Print List of Files
+    printf("Files on Foriegn Server:\n%s\n",resp);
+    return 1;
+}
+
+int upload(){
+    //UPLOAD -> FORIEGN DOWNLOAD
+    //Get information
+    int con = 0;
+    printf("Input a valid connection number between 1-%d:\n",N);
+    scanf("%d",&con);
+    con--; //index it
+    //check for valid connection
+    if (connects[con].id == -1) {
+        printf("Invalid Connection\n");
+        return 0;
+    }
+    if (checkAlive(con) != -1) {
+        //conection is dead
+        printf("Connection is Dead, exiting Upload\n");
+        return 0;
+    }
+    printf("Input a valid File Name to Upload:\n");
+    char fileName[100];
+    scanf("%s",fileName);
+
+    //Contact Connection
+    //GET FILE 
+    char filePath[150];
+    strcpy(filePath,"Upload/");
+    strcat(filePath,fileName);
+    FILE *fp = fopen(filePath,"r");
+    //check if file exsists 
+    if (fp == NULL || fp == 0){
+        printf("File Does not Exist\n");
+        return 0;
+    }
+    
+    //get file size
+    FILE *sizeFind = fopen(filePath,"rb");
+    fseek(sizeFind,0L, SEEK_END);
+    int bytes = ftell(sizeFind);
+    fclose(sizeFind);
+    
+    //Get Sending size from config.txt
+    FILE *config = fopen("config.txt","r");
+    if (config == NULL){
+        printf("config.txt file not found!\n");
+        return 0;
+    }
+    char number[50];
+    fgets(number,50,config);
+    int msgSize = atoi(number);
+    printf("Sending Size is %d\n",msgSize);
+
+
+    //Sending META data to Host
+    int sockfd, portn, n;
+    struct sockaddr_in serv_addr;
+    struct hostent *server;
+
+    //GET SOCKET
+    portn = atoi(connects[con].port);
+    sockfd = socket(AF_INET, SOCK_STREAM,0);
+    if (sockfd < 0){
+        printf("Error Opening Socket\n");
+        return 0;
+    }
+    server = gethostbyname(connects[con].name);
+    if (server ==NULL) {
+        printf("Connection is Inactive\n");
+        return 0;
+    }
+    bzero((char*)&serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,server->h_length);
+    serv_addr.sin_port = htons(portn);
+
+    //connect!
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+        printf("Connection is Inactive\n");
+        return 0;
+    }
+
+    //META STRING
+    //UPLOAD FILENAME HOSTNAME SIZE
+    char meta[500];
+    strcpy(meta,"UPLOAD ");
+    strcat(meta,fileName);
+    strcat(meta," ");
+    strcat(meta,hostName);
+    char strSize[50];
+    sprintf(strSize,"%d",bytes);
+    strcat(meta, " ");
+    strcat(meta,strSize);
+
+    write(sockfd,meta,strlen(meta));
+
+    //META response
+    char resp[100];
+    bzero(resp,100);
+    read(sockfd,resp,100);
+
+    if (strcmp(resp,"READY") != 0) {
+        printf("Upload Canceled\n");
+        return 0;
+    }
+    printf("Starting Upload\n");
+    //LOOP
+    char readF[msgSize];
+    bzero(readF,msgSize);
+    struct timeval start;
+    struct timeval end;
+    gettimeofday(&start,NULL);
+
+    while (fgets(readF,msgSize,fp) != NULL) {
+        //while we can pull stuff out of the file
+        read(sockfd,resp,100);
+        write(sockfd,readF,msgSize);
+    }
+    gettimeofday(&end,NULL);
+
+    //our file is finished!
+    read(sockfd,resp,100);
+    write(sockfd,"DONE",4);
+
+    //print stats
+    long double t = (end.tv_sec*1e6 + end.tv_usec) - (start.tv_sec*1e6 + start.tv_usec);
+    double seconds = t*.0000001;
+    long bits = (bytes*8);
+    float per = bits/seconds *.1; 
+
+    printf("\nTx (%s): %s -> %s\n"
+    "File Size: %d Bytes \n"
+    "Time Taken: %.0Lf uSeconds \n"
+    "Tx Rate: %.0f Bits/Second\n",
+    hostName, hostName, connects[con].name,bytes,t,per);
+}
+
+int download() {
+    //gets connection # and file name
+    int con = 0;
+    printf("Input a valid connection number between 1-%d:\n",N);
+    scanf("%d",&con);
+    con--; //index it
+    //check for valid connection
+    if (connects[con].id == -1) {
+        printf("Invalid Connection\n");
+        return 0;
+    }
+    if (checkAlive(con) != -1) {
+        //conection is dead
+        printf("Connection is Dead, exiting Upload\n");
+        return 0;
+    }
+    printf("Input a valid File Name to Download:\n");
+    char fileName[100];
+    scanf("%s",fileName);
+    
+    //CREATE SOCKET
+    int sockfd, portn, n;
+    struct sockaddr_in serv_addr;
+    struct hostent *server;
+
+    //GET SOCKET
+    portn = atoi(connects[con].port);
+    sockfd = socket(AF_INET, SOCK_STREAM,0);
+    if (sockfd < 0){
+        printf("Error Opening Socket\n");
+        return 0;
+    }
+    server = gethostbyname(connects[con].name);
+    if (server ==NULL) {
+        printf("Connection is Inactive");
+        return 0;
+    }
+    bzero((char*)&serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,server->h_length);
+    serv_addr.sin_port = htons(portn);
+
+    //connect!
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+        printf("Connection is Inactive");
+        return 0;
+    }
+
+    //FILE CHECK  | META WRITE
+    //DOWNLOAD FILENAME MYHOSTNAME
+    char meta[500];
+    strcpy(meta,"DOWNLOAD ");
+    strcat(meta,fileName);
+    strcat(meta," ");
+    strcat(meta,hostName);
+
+    //send meta
+    write(sockfd,meta,strlen(meta));
+    char resp[100];
+    bzero(resp,100);
+    read(sockfd,resp,100);
+
+    if (strcmp(resp,"FAIL") == 0) {
+        //IF FILE NOT FOUND
+        printf("File not found! Stopping Download\n");
+        return 0;
+    }
+    //File found
+    //make file in /Download
+    char command[100];
+    bzero(command,100);
+    strcpy(command,"touch Download/");
+    strcat(command,fileName);
+    system(command);
+    //make pointer to file
+    char filePath[200];
+    strcpy(filePath,"Download/");
+    strcat(filePath,fileName);
+    FILE *fp = fopen(filePath,"w");
+
+
+    //download files
+    char buffer[MAX];
+    bzero(buffer,MAX);
+
+    //keep going until file is finished
+    int i = 0;
+    while(strcmp(buffer,"DONE") != 0) {
+        if (i > 0)
+            fputs(buffer,fp);
+        bzero(buffer,MAX);
+        write(sockfd,"CHECK",5);
+        read(sockfd,buffer,MAX);
+        i++;
+    }
+
+    printf("Download Complete!\n");
+    return 1;
+}
 //Starts listening Code, Starts UI thread
 int main(int argc, char *argv[]){
     int port = 0;
@@ -440,7 +907,8 @@ int main(int argc, char *argv[]){
     while (1) {
         char *input;
         *input = 0;
-        printf("Choose an option, input corresponding number:\n(1) HELP\n(2) EXIT\n(3) MYIP\n(4) MYPORT\n(5) CONNECT\n(6) LIST\n(7) TERMINATE\n(8) ISALIVE\n(9) CREATOR\n");
+        printf("Choose an option, input corresponding number:\n(1) HELP\n(2) EXIT\n(3) MYIP\n(4) MYPORT\n(5) CONNECT\n(6) LIST\n(7) TERMINATE\n(8) ISALIVE\n(9) CREATOR\n"
+                "(a) GENERATE\n(b) UPLOAD\n(c) FORIEGN FILE CHECK\n(d) DOWNLOAD\n");
 
         scanf("%c",input); 
         switch(*input){
@@ -455,7 +923,11 @@ int main(int argc, char *argv[]){
                         "6: Lists current Connections To and From this Server\n"
                         "7: Deletes A Connection, Promps for Connection Number\n"
                         "8: Promps for Connection, Checks if it is still alive\n"
-                        "9: Prints Creator Information\n");
+                        "9: Prints Creator Information\n"
+                        "a: Promps for a fiel name, and a file size. File saved in Uploads/\n"
+                        "b: Promps for connection ID and a file name to send to this connection\n"
+                        "c: Promps for connection ID, returns list of files connection has\n"
+                        "d: Promps for connection ID and file name, Saves it to Download folder\n");
                 break;
             case '2':
                 //DONE
@@ -519,6 +991,27 @@ int main(int argc, char *argv[]){
                 //DONE
                 printf("CREATOR: Georges Brantley, EMAIL: gbrantle@purdue.edu\n");
                 break;
+            case 'a':
+                fflush(stdin);
+                create(); 
+                break;
+            case 'b':
+                //Upload, gets 2 prompts
+                fflush(stdin);
+                upload();
+                break;
+
+            case 'c':
+                //list available files to download
+                find_files();
+                break;
+
+            case 'd':
+                //download files
+                fflush(stdin);
+                download();
+                break;
+
             default:
                 printf("Input not recognized. Please insert a number 1-9!\n");
         }
