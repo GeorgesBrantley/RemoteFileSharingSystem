@@ -905,117 +905,112 @@ int main(int argc, char *argv[]){
     fetchIP();
     //Start UI
     while (1) {
-        char *input;
-        *input = 0;
-        printf("Choose an option, input corresponding number:\n(1) HELP\n(2) EXIT\n(3) MYIP\n(4) MYPORT\n(5) CONNECT\n(6) LIST\n(7) TERMINATE\n(8) ISALIVE\n(9) CREATOR\n"
-                "(a) GENERATE\n(b) UPLOAD\n(c) FORIEGN FILE CHECK\n(d) DOWNLOAD\n");
+        char input[20];
+        printf("Choose an option:\n(1) HELP\n(2) EXIT\n(3) MYIP\n(4) MYPORT\n(5) CONNECT\n(6) LIST\n(7) TERMINATE\n(8) ISALIVE\n(9) CREATOR\n"
+                "(a) GENERATE\n(b) UPLOAD\n(c) FILES\n(d) DOWNLOAD\n");
 
-        scanf("%c",input); 
-        switch(*input){
-            case '1':
-                //DONE
-                printf("Enter 1-9 corresponding to commands\n" 
-                        "1: Help\n" 
-                        "2: Exit\n"
-                        "3: Fetches IP Address of current server\n"
-                        "4: Fetches Port of Current program\n"
-                        "5: Attemps a Connection, promps for IP and Port address\n"
-                        "6: Lists current Connections To and From this Server\n"
-                        "7: Deletes A Connection, Promps for Connection Number\n"
-                        "8: Promps for Connection, Checks if it is still alive\n"
-                        "9: Prints Creator Information\n"
-                        "a: Promps for a fiel name, and a file size. File saved in Uploads/\n"
-                        "b: Promps for connection ID and a file name to send to this connection\n"
-                        "c: Promps for connection ID, returns list of files connection has\n"
-                        "d: Promps for connection ID and file name, Saves it to Download folder\n");
-                break;
-            case '2':
-                //DONE
-                //call terminate on everything in list
-                for (int x = 0; x < N; ++x) {
-                    if (connects[x].id != -1) 
-                        bigDelete(x);
-                }
-                printf("Thank you for using this program\n");
-                exit(0);
-                break;
-            case '3':
-                //DONE
-                fetchIP();
-                printf("This server is running on the IP: %s\n",hostIP);
-                break;
-            case '4':
-                //DONE
-                printf("Server port is %d\n",port);
-                break;
-            case '5':
-                //Connect
-                int response;
-                response= connect();
-                if (response == 0)
-                    printf("Connection Failed\n");
-                break;
-            case '6':
-                //List all connections into and outof
-                //DONE
-                printf("Printing List of Connections:\n");
-                for (int x = 0; x < N; ++x) {
-                    //print list
-                    if (connects[x].id != -1){
-                        printf("Connection %d: %s - %s\n",
-                            connects[x].id+1,connects[x].name,connects[x].ip);
-                    }
-                }
-                break;
-            case '7':
-                //Terminate
-                int in;
-                in= -1;
-                printf("Enter the Conneciton Number of the Stream you wish to Delete. 1-%d:\n",N);
-                scanf("%d",&in);
-                in--;//put it in index
-                int r;
-                r=bigDelete(in); 
-                if (r){
-                    in++;//put it to human location
-                    printf("Connection %d Has Been Deleted",in);
-                }
-                break;
-            case '8':
-                int i;
-                i= isAlive();
-                if (i != -1)
-                    deleteConnection(i);
-                break;
-            case '9':
-                //DONE
-                printf("CREATOR: Georges Brantley, EMAIL: gbrantle@purdue.edu\n");
-                break;
-            case 'a':
-                fflush(stdin);
-                create(); 
-                break;
-            case 'b':
-                //Upload, gets 2 prompts
-                fflush(stdin);
-                upload();
-                break;
-
-            case 'c':
-                //list available files to download
-                find_files();
-                break;
-
-            case 'd':
-                //download files
-                fflush(stdin);
-                download();
-                break;
-
-            default:
-                printf("Input not recognized. Please insert a number 1-9!\n");
+        scanf("%s",input); 
+        if (strcmp(input,"HELP") == 0) {
+            //DONE
+            printf("Enter the commands \n" 
+                    "HELP: Prints this\n" 
+                    "EXIT: Terminates program, notifies connections\n"
+                    "MYIP: Fetches IP Address of current server\n"
+                    "MYPORT: Fetches Port of Current program\n"
+                    "CONNECT: Attemps a Connection, promps for IP and Port address\n"
+                    "LIST: Lists current Connections To and From this Server\n"
+                    "TERMINATE: Deletes A Connection, Promps for Connection Number\n"
+                    "ISALIVE: Promps for Connection, Checks if it is still alive\n"
+                    "CREATOR: Prints Creator Information\n"
+                    "GENERATE: Promps for a file name, and a file size. File saved in Uploads/\n"
+                    "UPLOAD: Promps for connection ID and a file name to send to this connection\n"
+                    "FILES: Promps for connection ID, returns list of files connection has\n"
+                    "DOWNLOAD: Promps for connection ID and file name, Saves it to Download folder\n");
+            }
+        else if (strcmp(input,"EXIT") == 0) {
+            //DONE
+            //call terminate on everything in list
+            for (int x = 0; x < N; ++x) {
+                if (connects[x].id != -1) 
+                    bigDelete(x);
+            }
+            printf("Thank you for using this program\n");
+            exit(0);
         }
-        scanf("%c",input);
+        else if (strcmp(input,"MYIP") == 0) {
+            //DONE
+            fetchIP();
+            printf("This server is running on the IP: %s\n",hostIP);
+        }
+        else if (strcmp(input,"MYPORT") == 0) {
+            //DONE
+            printf("Server port is %d\n",port);
+        }
+        else if (strcmp(input,"CONNECT") == 0) {
+            //Connect
+            int response;
+            response= connect();
+            if (response == 0)
+                printf("Connection Failed\n");
+        }
+        else if (strcmp(input,"LIST") == 0) {
+            //List all connections into and outof
+            //DONE
+            printf("Printing List of Connections:\n");
+            for (int x = 0; x < N; ++x) {
+                //print list
+                if (connects[x].id != -1){
+                    printf("Connection %d: %s - %s\n",
+                        connects[x].id+1,connects[x].name,connects[x].ip);
+                }
+            }
+        }
+        else if (strcmp(input,"TERMINATE") == 0) {
+            //Terminate
+            int in;
+            in= -1;
+            printf("Enter the Conneciton Number of the Stream you wish to Delete. 1-%d:\n",N);
+            scanf("%d",&in);
+            in--;//put it in index
+            int r;
+            r=bigDelete(in); 
+            if (r){
+                in++;//put it to human location
+                printf("Connection %d Has Been Deleted",in);
+            }
+        }
+        else if (strcmp(input,"ISALIVE") ==0) {
+            int i;
+            i= isAlive();
+            if (i != -1)
+                deleteConnection(i);
+        }
+        else if (strcmp(input, "CREATOR") == 0) {
+            //DONE
+            printf("CREATOR: Georges Brantley, EMAIL: gbrantle@purdue.edu\n");
+        }
+        else if (strcmp(input,"GENERATE") == 0) {
+            fflush(stdin);
+            create(); 
+        }
+        else if (strcmp(input,"UPLOAD") == 0) {
+            //Upload, gets 2 prompts
+            fflush(stdin);
+            upload();
+        }
+        else if (strcmp(input,"FILES") == 0) {
+            //list available files to download
+            find_files();
+        }
+        else if (strcmp(input,"DOWNLOAD") == 0) {
+            //download files
+            fflush(stdin);
+            download();
+        }
+        else {
+        printf("Input not recognized. Please insert a number 1-9!\n");
+        }
+        bzero(input,20);
         printf("\n");
     }
 
